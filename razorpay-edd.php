@@ -197,18 +197,18 @@ function razorpay_process_payment($purchase_data)
     $order_no = edd_insert_payment($payment);
 
     $purchase_data = array(
-                      'key' => $edd_options['key_id'],
-                      'amount' => $payment['price'] * 100,
-                      'currency' => $payment['currency'],
-                      'description' => $purchase_summary,
-                      'prefill' => array(
-                        'name' => $customer_data['name'],
-                        'email' => $payment['user_info']['email']
-                      ),
-                      'notes' => array(
-                        'merchant_order' => $order_no
-                      )
-                );
+        'key'            => $edd_options['key_id'],
+        'amount'         => $payment['price'] * 100,
+        'currency'       => $payment['currency'],
+        'description'    => $purchase_summary,
+        'prefill'        => array(
+            'name'           => $customer_data['name'],
+            'email'          => $payment['user_info']['email']
+        ),
+        'notes'          => array(
+        'merchant_order' => $order_no
+        )
+    );
 
     // Have to get razorpay order id by using orders API
     $api = new Api($edd_options['key_id'], $edd_options['key_secret']);
@@ -243,10 +243,10 @@ add_action('edd_gateway_razorpay', 'razorpay_process_payment');
 function get_order_creation_data($purchase_data)
 {           
     $data = array(
-      'receipt' => $purchase_data['notes']['merchant_order'],
-      'amount' => $purchase_data['amount'],
-      'currency' => $purchase_data['currency'],
-      'payment_capture' => 1
+        'receipt'         => $purchase_data['notes']['merchant_order'],
+        'amount'          => $purchase_data['amount'],
+        'currency'        => $purchase_data['currency'],
+        'payment_capture' => 1
     );
 
     return $data;
