@@ -70,7 +70,7 @@ function razorpay_check_response($response, $order_no)
     {
         // Verifying payment signature
         $attributes = array(
-            'razorpay_payment_id' => $response['razorpay_signature'],
+            'razorpay_payment_id' => $response['razorpay_payment_id'],
             'razorpay_order_id'   => EDD()->session->get('razorpay_order_id'),
             'razorpay_signature'  => $response['razorpay_signature']
         );
@@ -85,7 +85,7 @@ function razorpay_check_response($response, $order_no)
         {
             $success = false;
 
-            $error = "PAYMENT_ERROR: Payment failed : " : $e->getMessage();
+            $error = "PAYMENT_ERROR: Payment failed : " . $e->getMessage();
         }
     }
 
@@ -230,7 +230,7 @@ function razorpay_process_payment($purchase_data)
         $button_html = file_get_contents(__DIR__.'/js/checkout.phtml');
 
         $keys = array('#json#', '#error_return_url#', '#return_url#', '#merchant_order#');
-        $values = array($json, $config_drata['error_return_url'], $config_data['return_url'], $order_no);
+        $values = array($json, $config_data['error_return_url'], $config_data['return_url'], $order_no);
 
         $html = str_replace($keys, $values, $button_html);
 
