@@ -198,9 +198,8 @@ function razorpay_process_payment($purchase_data)
 
     $purchase_data = array(
         'key'            => $edd_options['key_id'],
-        'amount'         => $payment['price'] * 100,
-        'currency'       => $payment['currency'],
         'description'    => $purchase_summary,
+        'currency'       => 'INR',
         'prefill'        => array(
             'name'           => $customer_data['name'],
             'email'          => $payment['user_info']['email']
@@ -209,6 +208,20 @@ function razorpay_process_payment($purchase_data)
         'merchant_order' => $order_no
         )
     );
+
+    if ($payment['currency'] !== 'INR')
+    {
+        $purchase_data['display_amount']   = $payment['price'];
+
+        $purchase_data['display_currency'] = $payment['currency'];
+
+        $purchase_data['amount'] = 100 * convertAmountToInr($payment['price'], 
+                                                            $payment['currency']);
+    }
+    else 
+    {
+        $purchase_data['amount']   = $payment['price'] * 100;
+    }
 
     // Have to get razorpay order id by using orders API
     $api = new Api($edd_options['key_id'], $edd_options['key_secret']);
@@ -250,6 +263,17 @@ function get_order_creation_data($purchase_data)
     );
 
     return $data;
+}
+
+function convertAmountToInr($displayAmount, $displayCurrency)
+{
+    $url = "https://api.fixer.io/latest?symbols=INR&base=$displayCurrency";
+
+    $exchange = json_decode(file_get_contents($url), true);
+
+    $amount = $exchange['rates']['INR'] * $displayAmount;   
+
+    return $amount;
 }
 
 function razorpay_add_settings($settings)
