@@ -62,40 +62,30 @@ function razorpay_check_response($response, $order_no)
 
     $payment_gateways = EDD()->session->get('edd_purchase');
 
-    $success = false;
+    $success = true;
+
     $error_message = 'Payment failed. Please try again.';
 
     if (!empty($response['razorpay_payment_id']))
     {
+        // Verifying payment signature
+        $attributes = array(
+            'razorpay_payment_id' => $response['razorpay_signature'],
+            'razorpay_order_id'   => EDD()->session->get('razorpay_order_id'),
+            'razorpay_signature'  => $response['razorpay_signature']
+        );
+
+        $api = new Api($edd_options['key_id'], $edd_options['key_secret']);
+
         try
-        {   
-            // we now get razorpay payment id, order id as well as signature. we need to verify signature.
-            $razorpay_signature = $response['razorpay_signature'];
-            $razorpay_payment_id = $response['razorpay_payment_id'];
-            $razorpay_order_id = EDD()->session->get('razorpay_order_id');
-
-            $api = new Api($edd_options['key_id'], $edd_options['key_secret']);
-            $payment = $api->payment->fetch($razorpay_payment_id);
-
-            $signature = hash_hmac('sha256', $razorpay_order_id . '|' . $razorpay_payment_id, $edd_options['key_secret']);
-
-            if (hash_equals($signature , $razorpay_signature))
-            {
-                $success = true;
-            }
-
-            else
-            {
-                $success = false;
-
-                $error = "PAYMENT_ERROR: Payment failed";
-            }
+        {
+            $api->utility->verifyPaymentSignature($attributes);
         }
-
-        catch (Exception $e)
+        catch (SignatureVerificationError $e)
         {
             $success = false;
-            $error ="EDD_ERROR: Request to Razorpay Failed";
+
+            $error = "PAYMENT_ERROR: Payment failed : " : $e->getMessage();
         }
     }
 
@@ -240,7 +230,7 @@ function razorpay_process_payment($purchase_data)
         $button_html = file_get_contents(__DIR__.'/js/checkout.phtml');
 
         $keys = array('#json#', '#error_return_url#', '#return_url#', '#merchant_order#');
-        $values = array($json, $config_data['error_return_url'], $config_data['return_url'], $order_no);
+        $values = array($json, $config_drata['error_return_url'], $config_data['return_url'], $order_no);
 
         $html = str_replace($keys, $values, $button_html);
 
