@@ -215,12 +215,11 @@ function razorpay_process_payment($purchase_data)
 
         $purchase_data['display_currency'] = $payment['currency'];
 
-        $purchase_data['amount'] = (int) 100 * convertAmountToInr($payment['price'], 
-                                                                  $payment['currency']);
+        $purchase_data['amount'] = (int) round(100 * convertAmountToInr($payment['price'], $payment['currency']));
     }
     else 
     {
-        $purchase_data['amount'] = (int) $payment['price'] * 100;
+        $purchase_data['amount'] = (int) round(100 * $payment['price']);
     }
 
     // Have to get razorpay order id by using orders API
