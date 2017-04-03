@@ -9,6 +9,9 @@ Author URI: http://razorpay.com
 
 if (!defined('ABSPATH')) exit;
 
+require_once __DIR__.'/razorpay-sdk/Razorpay.php';
+use Razorpay\Api\Api;
+
 // registers the gateway
 function razorpay_register_gateway($gateways)
 {
@@ -59,72 +62,30 @@ function razorpay_check_response($response, $order_no)
 
     $payment_gateways = EDD()->session->get('edd_purchase');
 
-    $success = false;
+    $success = true;
+
     $error_message = 'Payment failed. Please try again.';
 
     if (!empty($response['razorpay_payment_id']))
     {
+        // Verifying payment signature
+        $attributes = array(
+            'razorpay_payment_id' => $response['razorpay_payment_id'],
+            'razorpay_order_id'   => EDD()->session->get('razorpay_order_id'),
+            'razorpay_signature'  => $response['razorpay_signature']
+        );
+
+        $api = new Api($edd_options['key_id'], $edd_options['key_secret']);
+
         try
         {
-            $url =  "https://api.razorpay.com/v1/payments/{$response['razorpay_payment_id']}/capture";
-
-            $amount = $payment_gateways['price'] * 100;
-            $fields_string="amount={$amount}";
-
-            $key_id = $edd_options['key_id'];
-            $key_secret = $edd_options['key_secret'];
-            //cURL Request
-            $ch = curl_init();
-
-            //set the url, number of POST vars, POST data
-            curl_setopt($ch,CURLOPT_URL, $url);
-            curl_setopt($ch,CURLOPT_USERPWD, $key_id . ":" . $key_secret);
-            curl_setopt($ch,CURLOPT_TIMEOUT, 60);
-            curl_setopt($ch,CURLOPT_POST, 1);
-            curl_setopt($ch,CURLOPT_POSTFIELDS, $fields_string);
-            curl_setopt($ch,CURLOPT_RETURNTRANSFER, true);
-            curl_setopt($ch,CURLOPT_SSL_VERIFYPEER, true);
-            curl_setopt($ch,CURLOPT_CAINFO, plugin_dir_path(__FILE__) . 'ca-bundle.crt');
-
-            //execute post
-            $result = curl_exec($ch);
-            $http_status = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-
-
-            if ($result === false)
-            {
-                $success = false;
-                $error = 'Curl error: ' . curl_error($ch);
-            }
-            else
-            {
-                $response_array = json_decode($result, true);
-                //Check success response
-                if ($http_status === 200 and isset($response_array['error']) === false)
-                {
-                    $success = true;
-                }
-                else
-                {
-                    $success = false;
-
-                    if (!empty($response_array['error']['code']))
-                    {
-                        $error = $response_array['error']['code'].": ".$response_array['error']['description'];
-                    }
-                    else
-                    {
-                        $error = "RAZORPAY_ERROR: Invalid Response <br/>".$result;
-                    }
-                }
-            }
-            //close connection
-            curl_close($ch);
+            $api->utility->verifyPaymentSignature($attributes);
         }
-        catch (Exception $e)
+        catch (SignatureVerificationError $e)
         {
             $success = false;
-            $error ="EDD_ERROR: Request to Razorpay Failed";
+
+            $error = "PAYMENT_ERROR: Payment failed : " . $e->getMessage();
         }
     }
 
@@ -235,117 +196,84 @@ function razorpay_process_payment($purchase_data)
 
     $order_no = edd_insert_payment($payment);
 
-     $purchase_data = array(
-        'key_id'         => $edd_options['key_id'],
-        'amount'         => $payment['price'] * 100,
-        'merchant_order' => $order_no,
-        'currency'       => $payment['currency'],
-        'email'          => $payment['user_info']['email'],
-        'name'           => $customer_data['name'],
-        'config'         => $config_data,
-        'merchant_name'  => $edd_options['override_merchant_name']
+    $purchase_data = array(
+        'key'            => $edd_options['key_id'],
+        'description'    => $purchase_summary,
+        'currency'       => 'INR',
+        'prefill'        => array(
+            'name'           => $customer_data['name'],
+            'email'          => $payment['user_info']['email']
+        ),
+        'notes'          => array(
+        'merchant_order' => $order_no
+        )
     );
+
+    if ($payment['currency'] !== 'INR')
+    {
+        $purchase_data['display_amount']   = $payment['price'];
+
+        $purchase_data['display_currency'] = $payment['currency'];
+
+        $purchase_data['amount'] = (int) round(100 * convertAmountToInr($payment['price'], $payment['currency']));
+    }
+    else 
+    {
+        $purchase_data['amount'] = (int) round(100 * $payment['price']);
+    }
+
+    // Have to get razorpay order id by using orders API
+    $api = new Api($edd_options['key_id'], $edd_options['key_secret']);
+
+    $data = get_order_creation_data($purchase_data); // we aren't using classes here
+
+    $razorpay_order = $api->order->create($data);
+
+    $purchase_data['order_id'] = $razorpay_order['id'];
+
+    EDD()->session->set('razorpay_order_id', $razorpay_order['id']);
 
     $errors = edd_get_errors();
 
     if (!$errors)
     {
-        $html = '
-        <!doctype html>
-        <html>
-          <head>
-            <title>Razorpay</title>
-            <meta name="viewport" content="user-scalable=no,width=device-width,initial-scale=1,maximum-scale=1">
-            <meta http-equiv="pragma" content="no-cache">
-            <meta http-equiv="cache-control" content="no-cache">
-            <meta http-equiv="expires" content="0">
-            <style>
-                img{max-width: 100%; height: auto;}
-                body{font-family: ubuntu,helvetica,verdana,sans-serif; font-size: 14px; text-align: center; color: #414141; padding-top: 40px; line-height: 24px;background:#fff;}
-                label{position: absolute; top: 0; left: 0; right: 0; height: 100%; line-height: 32px; padding-left: 30px;}
-                input[type=button]{
-                    font-family: inherit;
-                    padding: 12px 20px;
-                    text-decoration: none;
-                    border-radius: 2px;
-                    border: 0;
-                    width: 124px;
-                    background: none;
-                    margin: 0 5px;
-                    color: #fff;
-                    cursor: pointer;
-                    -webkit-appearance: none;
-                }
-                input[type=button]:hover{background-image: linear-gradient(transparent,rgba(0,0,0,.05) 40%,rgba(0,0,0,.1))}
-                .grey{color: #777; margin-top: 20px; font-size: 12px; line-height: 18px;}
-                .danger{background-color: #EF6050!important}
-                .success{background-color: #61BC6D!important}
-            </style>
-            <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
-            <script>
-                var options = {
-                    "key": "' . $purchase_data['key_id'] . '",
-                    "amount": ' . $purchase_data['amount'] . ',
-                    "name": "' . $purchase_data['merchant_name'] . '",
-                    "description": "' . $purchase_summary . '",
-                    "handler": function (response) {
-                        document.getElementById("razorpay_id").value = response.razorpay_payment_id;
-                        document.getElementById("razorpay").submit();
-                    },
-                    "modal": {
-                        "ondismiss": function() {
-                            window.location.href = "' . $config['error_return_url'] . '";
-                        }
-                    },
-                    "prefill": {
-                        "name": "' . $purchase_data['name'] . '",
-                        "email": "' . $purchase_data['email'] . '"
-                    },
-                    "notes": {
-                        "edd_order_id": "' . $purchase_data['merchant_order'] . '"
-                    }
-                };
-                var rzp = new Razorpay(options);
-                rzp.open();
+        $json = json_encode($purchase_data);
 
-                function openRazorpay()
-                {
-                    rzp.open();
-                }
+        $button_html = file_get_contents(__DIR__.'/js/checkout.phtml');
 
-                function cancel(e)
-                {
-                    window.location.href = "' . $config['error_return_url'] . '";
-                }
-            </script>
-          </head>
-          <body>
-            <h3>Razorpay Payment</h3>
-            Please wait...<br>
-            <p>
-                <input type="button" value="Pay" onclick="openRazorpay(this)" class="success">
-                <input type="button" value="Cancel" onclick="cancel(this)" class="danger">
+        $keys = array('#json#', '#error_return_url#', '#return_url#', '#merchant_order#');
+        $values = array($json, $config_data['error_return_url'], $config_data['return_url'], $order_no);
 
-                <form action="' . $config_data['return_url'] . '" method="' . $config_data['return_method'] . '" id="razorpay">
-                    <input type="hidden" name="merchant_order_id" value="' . $purchase_data['merchant_order']  . '">
-                    <input type="hidden" name="razorpay_payment_id" id="razorpay_id">
-                    <input type="hidden" name="gateway" value="razorpay_gateway">
-                </form>
-            </p>
-            <p>
-
-            </p>
-            <p class="grey">
-            </p>
-            </form>
-          </body>
-        </html>';
+        $html = str_replace($keys, $values, $button_html);
 
         echo $html;
         exit;
     }
 }
 add_action('edd_gateway_razorpay', 'razorpay_process_payment');
+
+function get_order_creation_data($purchase_data)
+{           
+    $data = array(
+        'receipt'         => $purchase_data['notes']['merchant_order'],
+        'amount'          => (int) $purchase_data['amount'],
+        'currency'        => $purchase_data['currency'],
+        'payment_capture' => 1
+    );
+
+    return $data;
+}
+
+function convertAmountToInr($displayAmount, $displayCurrency)
+{
+    $url = "https://api.fixer.io/latest?symbols=INR&base=$displayCurrency";
+
+    $exchange = json_decode(file_get_contents($url), true);
+
+    $amount = $exchange['rates']['INR'] * $displayAmount;   
+
+    return $amount;
+}
 
 function razorpay_add_settings($settings)
 {
