@@ -29,7 +29,7 @@ that the directory is named `edd-razorpay`.
 
 == Support ==
 
-Visit [razorpay.com](https://razorpay.com) for support requests or email us at <support@razorpay.com>.
+Visit [razorpay.com/support](https://razorpay.com/support) for support requests.
 
 == License ==
 
