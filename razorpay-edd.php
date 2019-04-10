@@ -287,6 +287,7 @@ function razorpay_process_payment($purchase_data)
                     "key": "' . $purchase_data['key_id'] . '",
                     "amount": ' . $purchase_data['amount'] . ',
                     "name": "' . $purchase_data['merchant_name'] . '",
+                    "currency": "'.$purchase_data['currency'] .'",
                     "description": "' . $purchase_summary . '",
                     "handler": function (response) {
                         document.getElementById("razorpay_id").value = response.razorpay_payment_id;
