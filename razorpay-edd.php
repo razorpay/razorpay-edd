@@ -1,10 +1,13 @@
 <?php
 /*
-Plugin Name: Easy Digital Downloads - Razorpay Gateway
+Plugin Name: Razorpay for Easy Digital Downloads
 Description: Razorpay gateway for Easy Digital Downloads
-Version: 1.0
-Author: Razorpay
+Version: 2.0.0
+Stable tag: 2.0.0
+Author: Team Razorpay
 Author URI: http://razorpay.com
+License: GPLv2 or later
+License URI: http://www.gnu.org/licenses/gpl-2.0.html
 */
 
 if (!defined('ABSPATH')) exit;
@@ -68,8 +71,9 @@ function razorpay_check_response($response, $order_no)
         {
             $url =  "https://api.razorpay.com/v1/payments/{$response['razorpay_payment_id']}/capture";
 
+            $currency  = edd_get_currency();
             $amount = $payment_gateways['price'] * 100;
-            $fields_string="amount={$amount}";
+            $fields_string="amount={$amount}&currency={$currency}";
 
             $key_id = $edd_options['key_id'];
             $key_secret = $edd_options['key_secret'];
