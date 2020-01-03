@@ -12,6 +12,18 @@ License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
 if (!defined('ABSPATH')) exit;
 
+use Razorpay\Api\Api;
+use Razorpay\Api\Errors;
+
+const RAZORPAY_PAYMENT_ID   = 'razorpay_payment_id';
+const RAZORPAY_ORDER_ID     = 'razorpay_order_id';
+const RAZORPAY_SIGNATURE    = 'razorpay_signature';
+
+const CAPTURE            = 'capture';
+const AUTHORIZE          = 'authorize';
+const EDD_ORDER_ID       = 'edd_order_id';
+
+
 // registers the gateway
 function razorpay_register_gateway($gateways)
 {
@@ -58,83 +70,29 @@ add_action('init', 'razorpay_get_redirect_response');
 
 function razorpay_check_response($response, $order_no)
 {
-    global $edd_options;
-
-    $payment_gateways = EDD()->session->get('edd_purchase');
-
     $success = false;
     $error_message = 'Payment failed. Please try again.';
 
-    if (!empty($response['razorpay_payment_id']))
+    if ($order_no  and !empty($response[RAZORPAY_PAYMENT_ID]))
     {
+        $error = "";
+        $success = false;
+
         try
         {
-            $url =  "https://api.razorpay.com/v1/payments/{$response['razorpay_payment_id']}/capture";
-
-            $currency  = edd_get_currency();
-            $amount = $payment_gateways['price'] * 100;
-            $fields_string="amount={$amount}&currency={$currency}";
-
-            $key_id = $edd_options['key_id'];
-            $key_secret = $edd_options['key_secret'];
-            //cURL Request
-            $ch = curl_init();
-
-            //set the url, number of POST vars, POST data
-            curl_setopt($ch,CURLOPT_URL, $url);
-            curl_setopt($ch,CURLOPT_USERPWD, $key_id . ":" . $key_secret);
-            curl_setopt($ch,CURLOPT_TIMEOUT, 60);
-            curl_setopt($ch,CURLOPT_POST, 1);
-            curl_setopt($ch,CURLOPT_POSTFIELDS, $fields_string);
-            curl_setopt($ch,CURLOPT_RETURNTRANSFER, true);
-            curl_setopt($ch,CURLOPT_SSL_VERIFYPEER, true);
-            curl_setopt($ch,CURLOPT_CAINFO, plugin_dir_path(__FILE__) . 'ca-bundle.crt');
-
-            //execute post
-            $result = curl_exec($ch);
-            $http_status = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-
-
-            if ($result === false)
-            {
-                $success = false;
-                $error = 'Curl error: ' . curl_error($ch);
-            }
-            else
-            {
-                $response_array = json_decode($result, true);
-                //Check success response
-                if ($http_status === 200 and isset($response_array['error']) === false)
-                {
-                    $success = true;
-                }
-                else
-                {
-                    $success = false;
-
-                    if (!empty($response_array['error']['code']))
-                    {
-                        $error = $response_array['error']['code'].": ".$response_array['error']['description'];
-                    }
-                    else
-                    {
-                        $error = "RAZORPAY_ERROR: Invalid Response <br/>".$result;
-                    }
-                }
-            }
-            //close connection
-            curl_close($ch);
+            verifySignature($order_no, $response);
+            $success = true;
+            $razorpayPaymentId = sanitize_text_field($response[RAZORPAY_PAYMENT_ID]);
         }
-        catch (Exception $e)
+        catch (Errors\SignatureVerificationError $e)
         {
-            $success = false;
-            $error ="EDD_ERROR: Request to Razorpay Failed";
+            $error = 'EDD_ERROR: Payment to Razorpay Failed. ' . $e->getMessage();
         }
     }
 
     if ($success === true)
     {
-        $comments = __( 'Razorpay Transaction ID: ', 'edd-razorpay-gateway' ) . $response['razorpay_payment_id'] . "\n";
+        $comments = __( 'Razorpay Transaction ID: ', 'edd-razorpay-gateway' ) . $razorpayPaymentId . "\n";
         $response_text = 'publish';
         $comments .= $response_text;
         $comments = html_entity_decode( $comments, ENT_QUOTES, 'UTF-8' );
@@ -157,12 +115,12 @@ function razorpay_check_response($response, $order_no)
     {
         $comments = '';
 
-        if (isset($response['razorpay_payment_id']))
+        if (isset($razorpayPaymentId))
         {
-            $comments = __( 'Razorpay Transaction ID: ', 'edd-razorpay-gateway' ) . $response['razorpay_payment_id'] . "\n";
+            $comments = __( 'Razorpay Transaction ID: ', 'edd-razorpay-gateway' ) . $response[RAZORPAY_PAYMENT_ID] . "\n";
         }
 
-        $comments .= $response_text . ' ' . $error;
+        $comments .= $error;
         $comments = html_entity_decode( $comments, ENT_QUOTES, 'UTF-8' );
 
         $notes = array(
@@ -205,6 +163,87 @@ function razorpay_get_customer_data($purchase_data)
     return $customer_data;
 }
 
+/**
+ * Verify the signature on payment success
+ * @param  int $order_no
+ * @param  array $response
+ * @return
+ */
+function verifySignature(int $order_no, array $response)
+{
+    $api = getRazorpayApiInstance();
+
+    $attributes = array(
+        RAZORPAY_PAYMENT_ID => $response[RAZORPAY_PAYMENT_ID],
+        RAZORPAY_SIGNATURE  => $response[RAZORPAY_SIGNATURE],
+    );
+
+    $sessionKey = getOrderSessionKey($order_no);
+    $attributes[RAZORPAY_ORDER_ID] = EDD()->session->get($sessionKey);
+
+    $api->utility->verifyPaymentSignature($attributes);
+}
+
+/**
+ * Create the session key name
+ * @param  int $order_no
+ * @return
+ */
+function getOrderSessionKey($order_no)
+{
+    return RAZORPAY_ORDER_ID . $order_no;
+}
+
+/**
+* @codeCoverageIgnore
+*/
+function getRazorpayApiInstance()
+{
+    global $edd_options;
+
+    return new Api($edd_options['key_id'], $edd_options['key_secret']);
+}
+
+/**
+ * Create razorpay order id
+ * @param  int    $order_no
+ * @param  array  $payment
+ * @return string
+ */
+function createRazorpayOrderId(int $order_no, array $payment)
+{
+    global $edd_options;
+
+    $api = getRazorpayApiInstance();
+
+    $data = array(
+        'receipt'         => $order_no,
+        'amount'          => (int) round($payment['price'] * 100),
+        'currency'        => $payment['currency'],
+        'payment_capture' => ($edd_options['payment_action'] === AUTHORIZE) ? 0 : 1,
+        'notes'           => array(
+            EDD_ORDER_ID  => (string) $order_no,
+        ),
+    );
+
+    try
+    {
+        $razorpayOrder = $api->order->create($data);
+    }
+    catch (Exception $e)
+    {
+        return $e;
+    }
+
+    $razorpayOrderId = $razorpayOrder['id'];
+
+    $sessionKey = getOrderSessionKey($order_no);
+
+    EDD()->session->set($sessionKey, $razorpayOrderId);
+
+    return $razorpayOrderId;
+}
+
 function razorpay_process_payment($purchase_data)
 {
     global $edd_options;
@@ -212,6 +251,7 @@ function razorpay_process_payment($purchase_data)
     $payment_code       = 'razorpay';
     $customer_data      = razorpay_get_customer_data($purchase_data);
     $purchase_summary   = edd_get_purchase_summary($purchase_data);
+    $mod_version        = get_plugin_data(plugin_dir_path(__FILE__) . 'razorpay-edd.php')['Version'];
 
     // Config data
     $config_data = array(
@@ -239,15 +279,21 @@ function razorpay_process_payment($purchase_data)
 
     $order_no = edd_insert_payment($payment);
 
-     $purchase_data = array(
-        'key_id'         => $edd_options['key_id'],
-        'amount'         => $payment['price'] * 100,
-        'merchant_order' => $order_no,
-        'currency'       => $payment['currency'],
-        'email'          => $payment['user_info']['email'],
-        'name'           => $customer_data['name'],
-        'config'         => $config_data,
-        'merchant_name'  => $edd_options['override_merchant_name']
+    $razorpayOrderId = createRazorpayOrderId($order_no, $payment);
+
+    $purchase_data = array(
+        'key_id'                      => $edd_options['key_id'],
+        'amount'                      => $payment['price'] * 100,
+        'merchant_order'              => $order_no,
+        'currency'                    => $payment['currency'],
+        'email'                       => $payment['user_info']['email'],
+        'name'                        => $customer_data['name'],
+        'config'                      => $config_data,
+        'merchant_name'               => $edd_options['override_merchant_name'],
+        'razorpay_order_id'           => $razorpayOrderId,
+        'integration'                 => 'edd',
+        'integration_version'         => $mod_version,
+        'integration_parent_version'  => EDD_VERSION,
     );
 
     $errors = edd_get_errors();
@@ -292,14 +338,17 @@ function razorpay_process_payment($purchase_data)
                     "amount": ' . $purchase_data['amount'] . ',
                     "name": "' . $purchase_data['merchant_name'] . '",
                     "currency": "' . $purchase_data['currency'] . '",
+                    "order_id": "' . $purchase_data['razorpay_order_id'] . '",
                     "description": "' . $purchase_summary . '",
                     "handler": function (response) {
                         document.getElementById("razorpay_id").value = response.razorpay_payment_id;
+                        document.getElementById("razorpay_order_id").value = response.razorpay_order_id;
+                        document.getElementById("razorpay_signature").value = response.razorpay_signature;
                         document.getElementById("razorpay").submit();
                     },
                     "modal": {
                         "ondismiss": function() {
-                            window.location.href = "' . $config['error_return_url'] . '";
+                            window.location.href = "' . $config_data['error_return_url'] . '";
                         }
                     },
                     "prefill": {
@@ -308,7 +357,12 @@ function razorpay_process_payment($purchase_data)
                     },
                     "notes": {
                         "edd_order_id": "' . $purchase_data['merchant_order'] . '"
-                    }
+                    },
+                    "_": {
+                        "integration": "' . $purchase_data['integration'] . '",
+                        "integration_version": "' . $purchase_data['integration_version'] . '",
+                        "integration_parent_version": "' . $purchase_data['integration_parent_version'] . '"
+                    },
                 };
                 var rzp = new Razorpay(options);
                 rzp.open();
@@ -320,7 +374,7 @@ function razorpay_process_payment($purchase_data)
 
                 function cancel(e)
                 {
-                    window.location.href = "' . $config['error_return_url'] . '";
+                    window.location.href = "' . $config_data['error_return_url'] . '";
                 }
             </script>
           </head>
@@ -334,6 +388,8 @@ function razorpay_process_payment($purchase_data)
                 <form action="' . $config_data['return_url'] . '" method="' . $config_data['return_method'] . '" id="razorpay">
                     <input type="hidden" name="merchant_order_id" value="' . $purchase_data['merchant_order']  . '">
                     <input type="hidden" name="razorpay_payment_id" id="razorpay_id">
+                    <input type="hidden" name="razorpay_order_id" id="razorpay_order_id">
+                    <input type="hidden" name="razorpay_signature" id="razorpay_signature">
                     <input type="hidden" name="gateway" value="razorpay_gateway">
                 </form>
             </p>
@@ -387,6 +443,18 @@ function razorpay_add_settings($settings)
             'desc' => __('The key Id and key secret can be generated from "API Keys" section of Razorpay Dashboard. Use test or live for test or live mode.', 'razorpay'),
             'type' => 'text',
             'size' => 'regular'
+        ),
+        array(
+            'id'   => 'payment_action',
+            'name' => __('Payment Action', 'razorpay'),
+            'desc' => __('Payment action on order compelete.', 'razorpay'),
+            'type' => 'select',
+            'size' => 'regular',
+            'default' => CAPTURE,
+            'options' => array(
+                CAPTURE   => 'Authorize and Capture',
+                AUTHORIZE => 'Authorize',
+            )
         ),
         array(
             'id'   => 'override_merchant_name',
