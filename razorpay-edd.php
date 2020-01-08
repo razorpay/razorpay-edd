@@ -1,6 +1,6 @@
 <?php
 /*
-Plugin Name: Razorpay for Easy Digital Downloads
+Plugin Name: Razorpay for Easy Digital Download
 Description: Razorpay gateway for Easy Digital Downloads
 Version: 2.0.0
 Stable tag: 2.0.0
@@ -9,6 +9,9 @@ Author URI: http://razorpay.com
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 */
+require_once __DIR__.'/includes/razorpay-webhook.php';
+require_once __DIR__.'/razorpay-sdk/Razorpay.php';
+require_once ABSPATH . 'wp-admin/includes/plugin.php';
 
 if (!defined('ABSPATH')) exit;
 
@@ -77,12 +80,12 @@ function razorpay_check_response($response, $order_no)
     {
         $error = "";
         $success = false;
+        $razorpayPaymentId = sanitize_text_field($response[RAZORPAY_PAYMENT_ID]);
 
         try
         {
             verifySignature($order_no, $response);
             $success = true;
-            $razorpayPaymentId = sanitize_text_field($response[RAZORPAY_PAYMENT_ID]);
         }
         catch (Errors\SignatureVerificationError $e)
         {
@@ -90,6 +93,11 @@ function razorpay_check_response($response, $order_no)
         }
     }
 
+    updateOrder($success, $razorpayPaymentId, $order_no, $error, $error_message);
+}
+
+function updateOrder($success, $razorpayPaymentId, $order_no, $error, $error_message)
+{
     if ($success === true)
     {
         $comments = __( 'Razorpay Transaction ID: ', 'edd-razorpay-gateway' ) . $razorpayPaymentId . "\n";
@@ -117,7 +125,7 @@ function razorpay_check_response($response, $order_no)
 
         if (isset($razorpayPaymentId))
         {
-            $comments = __( 'Razorpay Transaction ID: ', 'edd-razorpay-gateway' ) . $response[RAZORPAY_PAYMENT_ID] . "\n";
+            $comments = __( 'Razorpay Transaction ID: ', 'edd-razorpay-gateway' ) . $razorpayPaymentId . "\n";
         }
 
         $comments .= $error;
@@ -195,13 +203,30 @@ function getOrderSessionKey($order_no)
 }
 
 /**
+* Return Wordpress plugin settings
+* @param  string $key setting key
+* @return mixed setting value
+*/
+function getSetting($key)
+{
+    global $edd_options;
+
+    if(isset($edd_options[$key]))
+    {
+        return $edd_options[$key];
+    }
+    return;
+}
+
+/**
 * @codeCoverageIgnore
 */
 function getRazorpayApiInstance()
 {
-    global $edd_options;
+    $key    = getSetting('key_id');
+    $secret = getSetting('key_secret');
 
-    return new Api($edd_options['key_id'], $edd_options['key_secret']);
+    return new Api($key, $secret);
 }
 
 /**
@@ -212,15 +237,13 @@ function getRazorpayApiInstance()
  */
 function createRazorpayOrderId(int $order_no, array $payment)
 {
-    global $edd_options;
-
     $api = getRazorpayApiInstance();
 
     $data = array(
         'receipt'         => $order_no,
         'amount'          => (int) round($payment['price'] * 100),
         'currency'        => $payment['currency'],
-        'payment_capture' => ($edd_options['payment_action'] === AUTHORIZE) ? 0 : 1,
+        'payment_capture' => (getSetting('payment_action') === AUTHORIZE) ? 0 : 1,
         'notes'           => array(
             EDD_ORDER_ID  => (string) $order_no,
         ),
@@ -246,8 +269,6 @@ function createRazorpayOrderId(int $order_no, array $payment)
 
 function razorpay_process_payment($purchase_data)
 {
-    global $edd_options;
-
     $payment_code       = 'razorpay';
     $customer_data      = razorpay_get_customer_data($purchase_data);
     $purchase_summary   = edd_get_purchase_summary($purchase_data);
@@ -255,7 +276,7 @@ function razorpay_process_payment($purchase_data)
 
     // Config data
     $config_data = array(
-        'return_url'            => get_permalink($edd_options['success_page']),
+        'return_url'            => get_permalink(getSetting('success_page')),
         'return_method'         => 'POST',
         'error_return_url'      => edd_get_checkout_uri() . '?payment-mode=' . $purchase_data['post_data']['edd-gateway'],
         'error_return_method'   => 'POST'
@@ -270,7 +291,7 @@ function razorpay_process_payment($purchase_data)
         'date'          => $purchase_data['date'],
         'user_email'    => $purchase_data['user_email'],
         'purchase_key'  => $purchase_data['purchase_key'],
-        'currency'      => $edd_options['currency'],
+        'currency'      => getSetting('currency'),
         'downloads'     => $purchase_data['downloads'],
         'cart_details'  => $purchase_data['cart_details'],
         'user_info'     => $purchase_data['user_info'],
@@ -282,14 +303,14 @@ function razorpay_process_payment($purchase_data)
     $razorpayOrderId = createRazorpayOrderId($order_no, $payment);
 
     $purchase_data = array(
-        'key_id'                      => $edd_options['key_id'],
+        'key_id'                      => getSetting('key_id'),
         'amount'                      => $payment['price'] * 100,
         'merchant_order'              => $order_no,
         'currency'                    => $payment['currency'],
         'email'                       => $payment['user_info']['email'],
         'name'                        => $customer_data['name'],
         'config'                      => $config_data,
-        'merchant_name'               => $edd_options['override_merchant_name'],
+        'merchant_name'               => getSetting('override_merchant_name'),
         'razorpay_order_id'           => $razorpayOrderId,
         'integration'                 => 'edd',
         'integration_version'         => $mod_version,
@@ -410,6 +431,8 @@ add_action('edd_gateway_razorpay', 'razorpay_process_payment');
 
 function razorpay_add_settings($settings)
 {
+    $webhookUrl = esc_url(admin_url('admin-post.php')) . '?action=rzp_edd_webhook';
+
     $razorpay_settings = array(
         array(
             'id'   => 'razorpay_settings',
@@ -462,10 +485,33 @@ function razorpay_add_settings($settings)
             'desc' => __('Merchant name to be displayed on Razorpay screen.', 'razorpay'),
             'type' => 'text',
             'size' => 'regular'
-        )
+        ),
+        array(
+            'id'   => 'enable_webhook',
+            'type' => 'checkbox',
+            'name' => __( 'Enable Webhook', 'razorpay' ),
+            'desc' => __( 'Enable Razorpay Webhook <a href="https://dashboard.razorpay.com/#/app/webhooks">here</a> with the URL listed below.' ). '<br/>' . __( '<span>'.$webhookUrl.'</span><br/><br/>Instructions and guide to <a href="https://github.com/razorpay/razorpay-woocommerce/wiki/Razorpay-Woocommerce-Webhooks">Razorpay webhooks</a>', 'razorpay' ),
+        ),
+        array(
+            'id'   => 'webhook_secret',
+            'name' => __('Webhook Secret', 'razorpay'),
+            'desc' => __('<br/> Webhook secret is used for webhook signature verification. This has to match the one added <a href="https://dashboard.razorpay.com/#/app/webhooks">here</a>', 'razorpay'),
+            'type' => 'text',
+            'size' => 'regular',
+        ),
     );
 
     return array_merge($settings, $razorpay_settings);
 }
 
 add_filter('edd_settings_gateways', 'razorpay_add_settings');
+
+add_action('admin_post_nopriv_rzp_edd_webhook', 'razorpay_edd_webhook_init', 10);
+
+// This is set to a priority of 10
+function razorpay_edd_webhook_init()
+{
+    $rzpWebhook = new RZP_EDD_Webhook();
+
+    $rzpWebhook->process();
+}
