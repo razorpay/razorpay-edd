@@ -1,8 +1,5 @@
 <?php
 
-require_once __DIR__.'/../razorpay-edd.php';
-require_once __DIR__.'/../razorpay-sdk/Razorpay.php';
-
 use Razorpay\Api\Api;
 use Razorpay\Api\Errors;
 
@@ -112,10 +109,10 @@ class RZP_EDD_Webhook
         //
         $orderId = $data['payload']['order']['entity']['notes']['edd_order_id'];
 
-        $order = new EDD_Payment(1491);
+        $order = new EDD_Payment($orderId);
 
-        // If it is already marked as paid, ignore the event
-        if ($order->status === 'publish')
+        // If it is already marked as paid or failed, ignore the event
+        if ($order->status === 'publish' or $order->status === 'failed')
         {
             return;
         }

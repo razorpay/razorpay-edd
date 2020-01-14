@@ -10,8 +10,6 @@ License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 */
 require_once __DIR__.'/includes/razorpay-webhook.php';
-require_once __DIR__.'/razorpay-sdk/Razorpay.php';
-require_once ABSPATH . 'wp-admin/includes/plugin.php';
 
 if (!defined('ABSPATH')) exit;
 
@@ -76,7 +74,7 @@ function razorpay_check_response($response, $order_no)
     $success = false;
     $error_message = 'Payment failed. Please try again.';
 
-    if ($order_no  and !empty($response[RAZORPAY_PAYMENT_ID]))
+    if ($order_no  and (empty($response[RAZORPAY_PAYMENT_ID]) === false))
     {
         $error = "";
         $success = false;
