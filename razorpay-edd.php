@@ -9,11 +9,11 @@ Author URI: http://razorpay.com
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 */
+if (!defined('ABSPATH')) exit;
+
 require_once __DIR__.'/includes/razorpay-webhook.php';
 require_once ABSPATH . 'wp-admin/includes/plugin.php';
 require_once __DIR__.'/razorpay-sdk/Razorpay.php';
-
-if (!defined('ABSPATH')) exit;
 
 use Razorpay\Api\Api;
 use Razorpay\Api\Errors;
