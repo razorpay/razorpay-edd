@@ -2,8 +2,8 @@
 Contributors: razorpay
 Tags: razorpay, payments, india, easy digital downloads, edd
 Requires at least: 3.9.2
-Tested up to: 5.2.2
-Stable tag: 2.0.0
+Tested up to: 5.3.2
+Stable tag: 2.1.0
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -29,8 +29,13 @@ that the directory is named `edd-razorpay`.
 1. Visit the Easy Digital Downloads settings page, and click on the Checkout/Payment Gateways tab.
 2. Click on Razorpay to edit the settings. If you do not see Razorpay in the list at the top of the screen make sure you have activated the plugin in the WordPress Plugin Manager.
 3. Enable the Payment Method, name it Credit Card / Debit Card / Internet Banking (this will show up on the payment page your customer sees), add in your key id and key secret.
+4. The Payment Action should be set to "Authorize and Capture". If you want to capture payments manually from the Dashboard after manual verification, set it to "Authorize".
 
 == Changelog =
+
+= 2.1.0 =
+* Set to default auto-capture
+* Added webhook support.
 
 = 2.0.0 =
 * Bug fixes for international currency
