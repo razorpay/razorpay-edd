@@ -1,5 +1,7 @@
 <?php
 
+require_once __DIR__.'/../razorpay-sdk/Razorpay.php';
+
 use Razorpay\Api\Api;
 use Razorpay\Api\Errors;
 
