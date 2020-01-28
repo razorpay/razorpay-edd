@@ -94,6 +94,15 @@ function razorpay_check_response($response, $order_no)
     }
 
     updateOrder($success, $razorpayPaymentId, $order_no, $error, $error_message);
+
+    if($success === true)
+    {
+        edd_send_to_success_page();
+    }
+    else
+    {
+        edd_send_back_to_checkout();
+    }
 }
 
 function updateOrder($success, $razorpayPaymentId, $order_no, $error, $error_message)
@@ -116,8 +125,6 @@ function updateOrder($success, $razorpayPaymentId, $order_no, $error, $error_mes
         edd_insert_payment_note($order_no, $comments);
 
         edd_empty_cart();
-
-        edd_send_to_success_page();
     }
     else
     {
@@ -142,8 +149,6 @@ function updateOrder($success, $razorpayPaymentId, $order_no, $error, $error_mes
         edd_insert_payment_note($order_no, $comments);
 
         edd_set_error('server_direct_validation', __($error_message, 'edd-razorpay-gateway'));
-
-        edd_send_back_to_checkout();
     }
 }
 
