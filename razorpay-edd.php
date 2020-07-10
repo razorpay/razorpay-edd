@@ -57,7 +57,7 @@ function razorpay_admin_notices()
 
 function razorpay_get_redirect_response()
 {
-    $redirect_response = $_POST;
+    $redirect_response = $_REQUEST;
 
     if (isset($redirect_response['gateway']) && $redirect_response['gateway'] === 'razorpay_gateway' && isset($redirect_response['merchant_order_id']))
     {
@@ -317,6 +317,7 @@ function razorpay_process_payment($purchase_data)
         'config'                      => $config_data,
         'merchant_name'               => getSetting('override_merchant_name'),
         'razorpay_order_id'           => $razorpayOrderId,
+        'callback_url'                => $config_data['return_url'] . "?gateway=razorpay_gateway&merchant_order_id=$order_no",
         'integration'                 => 'edd',
         'integration_version'         => $mod_version,
         'integration_parent_version'  => EDD_VERSION,
@@ -366,6 +367,7 @@ function razorpay_process_payment($purchase_data)
                     "currency": "' . $purchase_data['currency'] . '",
                     "order_id": "' . $purchase_data['razorpay_order_id'] . '",
                     "description": "' . $purchase_summary . '",
+                    "callback_url": "' . $purchase_data['callback_url'] . '",
                     "handler": function (response) {
                         document.getElementById("razorpay_id").value = response.razorpay_payment_id;
                         document.getElementById("razorpay_order_id").value = response.razorpay_order_id;
