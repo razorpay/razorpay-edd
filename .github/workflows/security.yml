@@ -18,7 +18,6 @@ jobs:
           fi
           exit 0
       - name: Success
-        if: steps.failed.conclusion == 'skipped'
         run: |
           echo 'Status check has passed!'
           curl -X POST -H "Content-Type: application/json" -H "Authorization: token ${{ github.token }}" \
