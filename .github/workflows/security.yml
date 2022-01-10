@@ -7,7 +7,6 @@ jobs:
   workflow_status:
     runs-on: [ ubuntu-latest ]
     name: Update Status Check
-    needs: [ semgrep ]
     if: always()
     env:
       githubCommit: ${{ github.event.pull_request.head.sha }}
