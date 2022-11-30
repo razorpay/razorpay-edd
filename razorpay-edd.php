@@ -390,7 +390,7 @@ function razorpay_process_payment($purchase_data)
                     "_": {
                         "integration": "' . $purchase_data['integration'] . '",
                         "integration_version": "' . $purchase_data['integration_version'] . '",
-                        "integration_parent_version": "' . $purchase_data['integration_parent_version'] . '"
+                        "integration_parent_version": "' . $purchase_data['integration_parent_version'] . '",
                         "integration_type": "' . $purchase_data['integration_type'] . '"
                     },
                 };
