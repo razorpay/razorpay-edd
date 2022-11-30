@@ -321,6 +321,7 @@ function razorpay_process_payment($purchase_data)
         'integration'                 => 'edd',
         'integration_version'         => $mod_version,
         'integration_parent_version'  => EDD_VERSION,
+        'integration_type'            => 'plugin'
     );
 
     $errors = edd_get_errors();
@@ -390,6 +391,7 @@ function razorpay_process_payment($purchase_data)
                         "integration": "' . $purchase_data['integration'] . '",
                         "integration_version": "' . $purchase_data['integration_version'] . '",
                         "integration_parent_version": "' . $purchase_data['integration_parent_version'] . '"
+                        "integration_type": "' . $purchase_data['integration_type'] . '"
                     },
                 };
                 var rzp = new Razorpay(options);
