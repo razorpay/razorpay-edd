@@ -3,7 +3,7 @@ Contributors: razorpay
 Tags: razorpay, payments, india, easy digital downloads, edd
 Requires at least: 3.9.2
 Tested up to: 5.3.2
-Stable tag: 2.1.1
+Stable tag: 2.1.2
 License: GPLv2 or later
 License URI: http://www.gnu.org/licenses/gpl-2.0.html
 
@@ -32,6 +32,9 @@ that the directory is named `edd-razorpay`.
 4. The Payment Action should be set to "Authorize and Capture". If you want to capture payments manually from the Dashboard after manual verification, set it to "Authorize".
 
 == Changelog =
+
+= 2.1.2 =
+* Added integration_type with value plugin for checkout instrumentation.
 
 = 2.1.1 =
 * Update latest sdk 2.8.1

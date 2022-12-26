@@ -2,8 +2,8 @@
 /*
 Plugin Name: Razorpay for Easy Digital Download
 Description: Razorpay gateway for Easy Digital Downloads
-Version: 2.1.1
-Stable tag: 2.1.1
+Version: 2.1.2
+Stable tag: 2.1.2
 Author: Team Razorpay
 Author URI: http://razorpay.com
 License: GPLv2 or later
