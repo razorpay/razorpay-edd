@@ -302,7 +302,11 @@ function razorpay_process_payment($purchase_data)
         'user_info'     => $purchase_data['user_info'],
         'status'        => 'pending'
     );
-
+    
+    if ( empty($payment['currency']) ) {
+        $payment['currency'] = 'USD';
+    }
+    
     $order_no = edd_insert_payment($payment);
 
     $razorpayOrderId = createRazorpayOrderId($order_no, $payment);
